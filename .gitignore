@@ -1,0 +1,7 @@
+.swp
+.swa
+.swo
+.vscode
+htmlcov
+__pycache__
+.coverage*
