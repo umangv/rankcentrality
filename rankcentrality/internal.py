@@ -122,7 +122,7 @@ def get_affinity_matrix(
             before running RankCentrality. Defaults to True.
     """
     A = scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(X, metric))
-    A = np.exp(-A ** 2 / kernel_width ** 2) - threshold
+    A = np.exp(-(A ** 2) / kernel_width ** 2) - threshold
     A[A < 0] = 0
     if stochastic:
         A = A / A.sum(axis=1)[:, None]
