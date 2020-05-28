@@ -2,6 +2,7 @@ from rankcentrality.types import Scores, Comparisons, ComparisonResults, Matrix
 import rankcentrality.internal as internal
 
 import numpy as np
+from sklearn.kernel_approximation import RBFSampler
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 
@@ -187,14 +188,35 @@ class RankSVM:
         of pairwise comparisons.
         """
         self.item_features = item_features
-        self.pw_transform = (
-            item_features[comps[:, 0], :] - self.item_features[comps[:, 1], :]
-        )
-        self.target_label = np.array([1, -1])[comp_results]
+        self.comps = comps
+        self.comp_results = comp_results
         self.svc = LinearSVC(fit_intercept=False, max_iter=10000)
+        self.pw_transform = None
+        self.target_label = None
+
+    def _pairwise_transform(self, features):
+        """Performs pairwise transformation.
+
+        Args:
+            features: Features to use.
+        """
+        self.pw_transform = (
+            features[self.comps[:, 0], :] - features[self.comps[:, 1], :]
+        )
+        self.target_label = np.array([1, -1])[self.comp_results]
 
     def run(self):
         """Runs the RankSVM algorithm."""
+        self._pairwise_transform(self.item_features)
         self.svc.fit(self.pw_transform, self.target_label)
         scores = self.svc.decision_function(self.item_features)
+        return scores.flatten()
+
+    def run_random_features(self):
+        """Runs the RankSVM algorithm with a random features transformation."""
+        rbf = RBFSampler()
+        features = rbf.fit_transform(self.item_features)
+        self._pairwise_transform(features)
+        self.svc.fit(self.pw_transform, self.target_label)
+        scores = self.svc.decision_function(features)
         return scores.flatten()

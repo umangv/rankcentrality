@@ -66,6 +66,11 @@ def fit_ranksvm(data: PairwiseData, features: rc.types.Matrix) -> rc.types.Score
     return ranksvm.run()
 
 
+def fit_ranksvm_rf(data: PairwiseData, features: rc.types.Matrix) -> rc.types.Scores:
+    ranksvm = rc.RankSVM(data.n_items, data.comps, data.comp_results, features)
+    return ranksvm.run_random_features()
+
+
 # -----
 # TESTS
 # -----
@@ -124,7 +129,9 @@ def test_no_features_nonergodic_rankcentrality(algorithm):
     assert np.allclose(scores, 1 / 3)
 
 
-@pytest.mark.parametrize("algorithm", [fit_rc_diff, fit_rc_diff_decayed, fit_ranksvm])
+@pytest.mark.parametrize(
+    "algorithm", [fit_rc_diff, fit_rc_diff_decayed, fit_ranksvm, fit_ranksvm_rf]
+)
 def test_features(algorithm):
     n_items = 3
     comps = np.array([[0, 1], [0, 2], [2, 1]])
