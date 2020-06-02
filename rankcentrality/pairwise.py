@@ -1,10 +1,12 @@
-from rankcentrality.types import Scores, Comparisons, ComparisonResults, Matrix
-import rankcentrality.internal as internal
+from typing import Optional
 
 import numpy as np
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
+
+from rankcentrality.types import Scores, Comparisons, ComparisonResults, Matrix
+import rankcentrality.internal as internal
 
 
 class BTLMLE:
@@ -108,24 +110,61 @@ class RankCentrality:
         """
         return self.run_regularized(eta * (self.n_comps ** -1 / 2))
 
+    def get_diffusion_matrix(
+        self,
+        item_features: Matrix,
+        kernel_width: float,
+        threshold: float = 0,
+        metric: str = "euclidean",
+        lam: Optional[float] = None,
+    ) -> Matrix:
+        """Gets the diffusion matrix (can be cached for performance).
+
+        Args:
+            item_features: A matrix of shape (n_items, n_dimensions)
+            kernel_width: The kernel width sigma used to compute affinity.
+            threshold: amount by which to soft-threshold entries in the
+                afinity matrix.
+            metric: A distance metric from which to compute affinity. Any
+                value supported by scipy's pairwise distance methods
+                (scipy.spatial.distance.pdist) is acceptable.
+            lam: (optional) A value of lambda to further regularize the
+                RankCentrality process. It is often helpful to set this to a
+                small positive value when the number of comparisons is
+                extremely low.
+        """
+        D_diff = internal.get_affinity_matrix(
+            item_features, kernel_width, threshold, metric, True
+        )
+        if lam:
+            D_diff = D_diff @ internal.d_lam(self.n_items, lam)
+        return D_diff
+
     def run_diffused(
         self,
         item_features: Matrix,
         kernel_width: float,
         threshold: float = 0,
         metric: str = "euclidean",
+        lam: Optional[float] = None,
     ) -> Scores:
         """Runs Diffusion-based Regularized RankCentrality.
 
         Args:
             item_features: A matrix of shape (n_items, n_dimensions)
             kernel_width: The kernel width sigma used to compute affinity.
+            threshold: amount by which to soft-threshold entries in the
+                afinity matrix.
             metric: A distance metric from which to compute affinity. Any
-            value supported by scipy's pairwise distance methods
-            (scipy.spatial.distance.pdist) is acceptable.
+                value supported by scipy's pairwise distance methods
+                (scipy.spatial.distance.pdist) is acceptable.
+            lam: (optional) A value of lambda to further regularize the
+                RankCentrality process. It is often helpful to set this to a
+                small positive value when the number of comparisons is
+                extremely low.
         """
-        D_diff = internal.get_affinity_matrix(
-            item_features, kernel_width, threshold, metric, True
+        D_diff = self.get_diffusion_matrix(
+            item_features, kernel_width, threshold, metric, lam
         )
         return internal.get_stationary_distribution(self.Q_hat @ D_diff)
 
@@ -135,6 +174,7 @@ class RankCentrality:
         kernel_width: float,
         threshold: float = 0,
         metric: str = "euclidean",
+        lam: Optional[float] = None,
     ) -> Scores:
         """Runs Diffusion-based (decayed) Regularized RankCentrality.
 
@@ -143,12 +183,18 @@ class RankCentrality:
         Args:
             item_features: A matrix of shape (n_items, n_dimensions)
             kernel_width: The kernel width sigma used to compute affinity.
+            threshold: amount by which to soft-threshold entries in the
+                afinity matrix.
             metric: A distance metric from which to compute affinity. Any
                 value supported by scipy's pairwise distance methods
                 (scipy.spatial.distance.pdist) is acceptable.
+            lam: (optional) A value of lambda to further regularize the
+                RankCentrality process. It is often helpful to set this to a
+                small positive value when the number of comparisons is
+                extremely low.
         """
-        D_diff = internal.get_affinity_matrix(
-            item_features, kernel_width, threshold, metric, True
+        D_diff = self.get_diffusion_matrix(
+            item_features, kernel_width, threshold, metric, lam
         )
         D_decayed = (1 / np.sqrt(self.n_comps)) * D_diff + (
             1 - 1 / np.sqrt(self.n_comps)
