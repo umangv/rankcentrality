@@ -103,10 +103,9 @@ def plot_experiment_metrics(
     f, ax = plt.subplots()
     ax.set_xlabel("Number of comparisons")
     ax.set_ylabel(
-        {
-            "kendalltau": "Kendall Tau distance",
-            "ell_2": r"$\|\hat\pi - \pi\|/\|\pi\|$",
-        }[loss]
+        {"kendalltau": "Kendall Tau metric", "ell_2": r"$\|\hat\pi - \pi\|/\|\pi\|$",}[
+            loss
+        ]
     )
     ax.set_xscale("log")
     if loss == "ell_2":
