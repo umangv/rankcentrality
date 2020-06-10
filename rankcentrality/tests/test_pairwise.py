@@ -5,6 +5,7 @@ import numpy as np
 
 import rankcentrality as rc
 import rankcentrality.internal as internal
+import rankcentrality.siamese as siamese
 
 
 class PairwiseData(NamedTuple):
@@ -71,6 +72,11 @@ def fit_ranksvm_rf(data: PairwiseData, features: rc.types.Matrix) -> rc.types.Sc
     return ranksvm.run_random_features()
 
 
+def fit_siamese(data: PairwiseData, features: rc.types.Matrix) -> rc.types.Scores:
+    siam = siamese.SiameseNetRank(data.n_items, data.comps, data.comp_results, features)
+    return siam.run()
+
+
 # -----
 # TESTS
 # -----
@@ -130,7 +136,8 @@ def test_no_features_nonergodic_rankcentrality(algorithm):
 
 
 @pytest.mark.parametrize(
-    "algorithm", [fit_rc_diff, fit_rc_diff_decayed, fit_ranksvm, fit_ranksvm_rf]
+    "algorithm",
+    [fit_rc_diff, fit_rc_diff_decayed, fit_ranksvm, fit_ranksvm_rf, fit_siamese],
 )
 def test_features(algorithm):
     n_items = 3
