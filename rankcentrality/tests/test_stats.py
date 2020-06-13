@@ -1,9 +1,11 @@
 import numpy as np
+import pytest
 
 import rankcentrality as rc
 
 
-def test_generates_metrics():
+@pytest.mark.parametrize("loss", ["kt", "2", "ete"])
+def test_generates_metrics(loss):
     # num_items = 2
     num_comps = [5, 10, 20]
     num_repetitions = 5
@@ -15,13 +17,14 @@ def test_generates_metrics():
     metrics = rc.stats.compute_experiment_metrics(
         dummy_results,
         w,
-        loss="ell_2",
+        loss=loss,
         num_comps_length=len(num_comps),
         num_repetitions=num_repetitions,
     )
-    assert np.allclose(metrics["algo1"].means, 0)
+    expected_mean = {"kt": 1, "2": 0, "ete": 0.2}
+    assert np.allclose(metrics["algo1"].means, expected_mean[loss])
     assert np.allclose(metrics["algo1"].std_errs, 0)
-    assert not np.allclose(metrics["algo2"].means, 0)
+    assert not np.allclose(metrics["algo2"].means, expected_mean[loss])
     assert np.allclose(metrics["algo1"].std_errs, 0)
 
 

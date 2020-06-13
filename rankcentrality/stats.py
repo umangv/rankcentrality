@@ -1,23 +1,72 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 import numpy as np
+import numba
 import pandas as pd
 from scipy.stats import kendalltau
 
-from rankcentrality.types import Scores, ExperimentResults, ExperimentMetrics, Metrics
+from rankcentrality.types import (
+    Scores,
+    Matrix,
+    ExperimentResults,
+    ExperimentMetrics,
+    Metrics,
+)
 
 _line_styles = ["-", ":", "-.", "--"]
 
 canonical_loss_name = {
     "kendalltau": "kendalltau",
     "ell_2": "ell_2",
+    "exp_test_error": "exp_test_error",
     # aliases
     "kt": "kendalltau",
     "2": "ell_2",
     "l2": "ell_2",
+    "ete": "exp_test_error",
 }
+
+
+@numba.njit
+def _getP(scores: Scores) -> Matrix:
+    """Returns the BTL preference matrix for the scores given."""
+    n = len(scores)
+    P = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            P[i, j] = scores[j] / (scores[i] + scores[j])
+    return P
+
+
+@numba.njit
+def expected_test_error(scores_hat: Scores, scores: Scores) -> float:
+    """Computes the expected test error.
+
+    Args:
+        scores: the vector of true scores.
+        scores_hat: a vector of empirically estimated scores.
+    Returns:
+        The probability that scores_hat will correctly predict the outcome of
+        a pairwise comparison between a pair of items chosen uniformly at
+        random from all possible pairs.
+    """
+    scores = scores.flatten()
+    scores_hat = scores_hat.flatten()
+    n_items = len(scores)
+    P = _getP(scores)
+    numerator = 0
+    denominator = 0
+    for i in range(n_items):
+        for j in range(n_items):
+            if i == j:
+                continue
+            pred = float(int(scores_hat[j] > scores_hat[i]))
+            numerator += np.abs(pred - P[i, j])
+            denominator += 1
+    assert denominator == (n_items * (n_items - 1)), "Internal error."
+    return numerator / denominator
 
 
 def compute_loss(w_hat: Scores, w: Scores, loss: str) -> float:
@@ -31,6 +80,11 @@ def compute_loss(w_hat: Scores, w: Scores, loss: str) -> float:
         relative to the norm of w. That is, the returned loss is
         || w_hat - w || / || w ||,
         where || . || is the ell_2 norm.
+      - The expected test error (alias "ete") loss is the expected test error
+        assuming the BTL model. That is, if we draw a pair of items uniformly
+        at random, the expected test error is probability that the empirical
+        scores and true scores agree on which item is more likely to be
+        preferred.
 
     Args:
         w_hat: The empirical score vector.
@@ -55,6 +109,8 @@ def compute_loss(w_hat: Scores, w: Scores, loss: str) -> float:
         w = w / np.linalg.norm(w, 1)
         w_hat = w_hat / np.linalg.norm(w_hat, 1)
         return np.linalg.norm(w - w_hat, 2) / np.linalg.norm(w, 2)
+    elif loss == "exp_test_error":
+        return expected_test_error(w_hat, w)
 
 
 def compute_experiment_metrics(
@@ -96,16 +152,21 @@ def compute_experiment_metrics(
 
 
 def plot_experiment_metrics(
-    experiment_metrics: ExperimentMetrics, num_comps_list: List[int], loss: str
+    experiment_metrics: ExperimentMetrics,
+    num_comps_list: List[int],
+    loss: str,
+    num_comps_label: Optional[str] = None,
 ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
     """Plots experiments metrics as a Matplotlib figure."""
     loss = canonical_loss_name[loss]
     f, ax = plt.subplots()
-    ax.set_xlabel("Number of comparisons")
+    ax.set_xlabel(num_comps_label or "Number of comparisons")
     ax.set_ylabel(
-        {"kendalltau": "Kendall Tau metric", "ell_2": r"$\|\hat\pi - \pi\|/\|\pi\|$",}[
-            loss
-        ]
+        {
+            "kendalltau": "Kendall Tau metric",
+            "ell_2": r"$\|\hat\pi - \pi\|/\|\pi\|$",
+            "exp_test_error": "Expected Test Error",
+        }[loss]
     )
     ax.set_xscale("log")
     if loss == "ell_2":
