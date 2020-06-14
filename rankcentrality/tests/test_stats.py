@@ -25,7 +25,33 @@ def test_generates_metrics(loss):
     assert np.allclose(metrics["algo1"].means, expected_mean[loss])
     assert np.allclose(metrics["algo1"].std_errs, 0)
     assert not np.allclose(metrics["algo2"].means, expected_mean[loss])
+    assert np.allclose(metrics["algo2"].std_errs, 0)
+
+
+def test_generates_test_errors():
+    # num_items = 2
+    num_comps = [5, 10, 20]
+    num_repetitions = 10
+    test_comps = np.array([[0, 1], [1, 0]])
+    test_comp_results = np.array([1, 0])  # item 1 wins both times
+    dummy_results = {
+        "algo1": [[np.array([0, 1]),] * num_repetitions] * len(num_comps),
+        "algo2": [[np.array([0, 1]), np.array([1, 0])] * (num_repetitions // 2)]
+        * len(num_comps),
+    }
+    metrics = rc.stats.compute_experiment_test_errors(
+        dummy_results,
+        test_comps,
+        test_comp_results,
+        num_comps_length=len(num_comps),
+        num_repetitions=num_repetitions,
+    )
+    np.set_printoptions(precision=8)
+    print(metrics["algo2"].means - 0.5)
+    assert np.allclose(metrics["algo1"].means, 0)
     assert np.allclose(metrics["algo1"].std_errs, 0)
+    assert np.allclose(metrics["algo2"].means, 0.5)
+    assert np.allclose(metrics["algo2"].std_errs, 0.5 / np.sqrt(10))
 
 
 def test_generates_plots():

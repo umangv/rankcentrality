@@ -74,7 +74,7 @@ def fit_ranksvm_rf(data: PairwiseData, features: rc.types.Matrix) -> rc.types.Sc
 
 def fit_siamese(data: PairwiseData, features: rc.types.Matrix) -> rc.types.Scores:
     siam = siamese.SiameseNetRank(data.n_items, data.comps, data.comp_results, features)
-    return siam.run()
+    return siam.run(epochs=30)
 
 
 # -----

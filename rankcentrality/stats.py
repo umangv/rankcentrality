@@ -13,6 +13,8 @@ from rankcentrality.types import (
     ExperimentResults,
     ExperimentMetrics,
     Metrics,
+    Comparisons,
+    ComparisonResults,
 )
 
 _line_styles = ["-", ":", "-.", "--"]
@@ -27,6 +29,16 @@ canonical_loss_name = {
     "l2": "ell_2",
     "ete": "exp_test_error",
 }
+
+
+def _test_error(scores_hat, test_comps, test_results):
+    """Computes the test error of a score vector against test data."""
+    n_points = scores_hat.size
+    assert scores_hat.shape in [(n_points,), (n_points, 1)]
+    scores_hat = scores_hat.flatten()
+    predicted_result = scores_hat[test_comps[:, 1]] - scores_hat[test_comps[:, 0]]
+    predicted_result = (np.sign(predicted_result) + 1 / 2).astype(int)
+    return 1 - (predicted_result == test_results.flatten()).mean()
 
 
 @numba.njit
@@ -151,14 +163,63 @@ def compute_experiment_metrics(
     return experiment_metrics
 
 
+def compute_experiment_test_errors(
+    results: ExperimentResults,
+    test_comps: Comparisons,
+    test_comp_results: ComparisonResults,
+    num_comps_length: int,
+    num_repetitions: int,
+) -> ExperimentMetrics:
+    """Computes metrics for an experiment.
+
+    An experiment is assumed to have multiple algorithms, emprical results
+    for different number of pairwise comparisons, and, for each such
+    scenario, a number of repetitions (with fresh sets of comparisons for
+    each repetition).
+
+    This function computes the mean and standard error of the loss of each
+    algorithm for each number of comparisons.
+    """
+    experiment_metrics = {}
+    for algo, algo_results in results.items():
+        # algo_results[num_comps_index][repetition_index] is a score vector of
+        # the corresponding experiment
+        errors = np.array(
+            [
+                [
+                    _test_error(w_hat, test_comps, test_comp_results)
+                    for w_hat in repetitions
+                ]
+                for repetitions in algo_results
+            ]
+        )
+        assert errors.shape == (num_comps_length, num_repetitions,), (
+            f"Not all algorithms had {num_comps_length} different values "
+            f"of number of comparisons and {num_repetitions} repetitions."
+        )
+        experiment_metrics[algo] = Metrics(
+            means=np.mean(errors, axis=1),
+            std_errs=np.std(errors, axis=1) / np.sqrt(num_repetitions),
+        )
+    return experiment_metrics
+
+
 def plot_experiment_metrics(
     experiment_metrics: ExperimentMetrics,
     num_comps_list: List[int],
     loss: str,
     num_comps_label: Optional[str] = None,
 ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
-    """Plots experiments metrics as a Matplotlib figure."""
-    loss = canonical_loss_name[loss]
+    """Plots experiments metrics as a Matplotlib figure.
+    
+    Args:
+        experiment_metrics: metrics (typically from the functions above).
+        num_comps_list: list of the number of comparisons
+        loss: either the loss type used to compute metrics or a label for the plot.
+        num_comps_label: if the horizontal axis is not number of comparisons,
+            a label to apply on the plot.
+    """
+    loss = canonical_loss_name.get(loss, loss)
     f, ax = plt.subplots()
     ax.set_xlabel(num_comps_label or "Number of comparisons")
     ax.set_ylabel(
@@ -166,7 +227,7 @@ def plot_experiment_metrics(
             "kendalltau": "Kendall Tau metric",
             "ell_2": r"$\|\hat\pi - \pi\|/\|\pi\|$",
             "exp_test_error": "Expected Test Error",
-        }[loss]
+        }.get(loss, loss)
     )
     ax.set_xscale("log")
     if loss == "ell_2":
