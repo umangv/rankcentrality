@@ -2,6 +2,7 @@ from typing import NamedTuple
 
 import pytest
 import numpy as np
+from flaky import flaky
 
 import rankcentrality as rc
 import rankcentrality.internal as internal
@@ -73,7 +74,12 @@ def fit_ranksvm_rf(data: PairwiseData, features: rc.types.Matrix) -> rc.types.Sc
 
 
 def fit_siamese(data: PairwiseData, features: rc.types.Matrix) -> rc.types.Scores:
-    siam = siamese.SiameseNetRank(data.n_items, data.comps, data.comp_results, features)
+    siam = siamese.SiameseNetRank(
+        data.n_items,
+        np.repeat(data.comps, 50, axis=0),
+        np.repeat(data.comp_results, 50),
+        features,
+    )
     return siam.run(epochs=30)
 
 
@@ -135,6 +141,7 @@ def test_no_features_nonergodic_rankcentrality(algorithm):
     assert np.allclose(scores, 1 / 3)
 
 
+@flaky
 @pytest.mark.parametrize(
     "algorithm",
     [fit_rc_diff, fit_rc_diff_decayed, fit_ranksvm, fit_ranksvm_rf, fit_siamese],
